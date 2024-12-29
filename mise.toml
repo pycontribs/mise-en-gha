@@ -1,0 +1,5 @@
+[tools]
+github-cli = "latest"
+node = { version = "22", postinstall = "corepack enable" }
+python = { version = "latest", default_packages_file = ".default-python-packages"}
+task = "latest"

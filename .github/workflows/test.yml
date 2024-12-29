@@ -1,0 +1,80 @@
+---
+name: test
+
+on:
+  push: # only publishes pushes to the main branch to TestPyPI
+    branches: # any integration branch but not tag
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  build:
+    name: ${{ matrix.name || matrix.os }}
+    runs-on: ${{ matrix.os || 'ubuntu-24.04' }}
+    defaults:
+      run:
+        shell: ${{ matrix.shell || 'bash'}}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: # https://docs.github.com/en/actions/using-github-hosted-runners/using-github-hosted-runners/about-github-hosted-runners
+          - ubuntu-24.04
+          - macos-15
+          - macos-14
+    steps:
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # needed by setuptools-scm
+          submodules: true
+
+
+      - name: Show info about default shell used by github runners
+        run: |
+          set -euxo pipefail
+          pwd
+          ls
+          echo $SHELL
+          id
+          type curl
+          type sh
+
+      - name: Install mise
+        uses: jdx/mise-action@v2
+
+      - name: Install mise extra python packages
+        run: |
+          mise exec --command "python3 -m pip install -r .default-python-packages"
+          mise reshim
+
+      - name: Valdate mise availability
+        run: |
+          set -euxo pipefail
+          type -a mise
+          mise --version
+          mise doctor
+          mise ls
+
+          mise exec --command "python3 --version"
+          mise exec --command "python3 -m pip --version"
+          mise exec --command "python3 -m tox --version"
+          mise exec --command "gh --version"
+          mise exec --command "task --version"
+
+          type -a python3
+          type -a pip3
+          type -a gh
+          type -a task
+          type -a node
+          type -a tox
+
+          tox --version
