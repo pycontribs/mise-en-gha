@@ -15,6 +15,7 @@ concurrency:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  WSLENV: HOSTNAME:CI:GITHUB_ACTION:GITHUB_ACTION_PATH/p:GITHUB_ACTION_REPOSITORY:GITHUB_WORKFLOW:GITHUB_WORKSPACE/p:GITHUB_PATH/p:GITHUB_ENV/p:VIRTUAL_ENV/p
 
 jobs:
   build:
@@ -30,7 +31,49 @@ jobs:
           - ubuntu-24.04
           - macos-15
           - macos-14
+        include:
+          - os: windows-2022
+            wsl: true
+            name: wsl (2022)
+            shell: wsl-bash {0}
+          # disabled due to https://github.com/Vampire/setup-wsl/issues/65
+          # - os: windows-2025
+          #   wsl: true
+          #   name: wsl (2025)
+          #   shell: wsl-bash {0}
     steps:
+
+      - name: Prepare PATH for mise shims on Windows
+        if: runner.os == 'Windows'
+        # override to ensure that bash is not accidentally used for this one
+        shell: powershell
+        run: |
+          echo "${env:LOCALAPPDATA}\mise\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "${env:LOCALAPPDATA}\mise\shims" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install mise
+        uses: jdx/mise-action@v2
+
+      - if: matrix.wsl
+        uses: Vampire/setup-wsl@v4
+        with:
+          additional-packages: curl
+          distribution: Ubuntu-22.04
+          set-as-default: "true"
+          # '-i' seems to be the only option that loads .bashrc file that we need
+          # https://github.com/Vampire/setup-wsl/discussions/54
+          wsl-shell-command: "bash -i -eo pipefail"
+          # https://github.com/MicrosoftDocs/WSL/blob/main/WSL/wsl-config.md#L159
+          wsl-conf: |
+            [automount]
+            enabled = true
+            root = /
+            options = "metadata,umask=077"
+            [interop]
+            enabled = true
+            appendWindowsPath = true
+            [network]
+            hostname = wsl
 
       - uses: actions/checkout@v4
         with:
@@ -41,15 +84,13 @@ jobs:
       - name: Show info about default shell used by github runners
         run: |
           set -euxo pipefail
+          echo "PATH=$PATH"
           pwd
           ls
           echo $SHELL
           id
           type curl
           type sh
-
-      - name: Install mise
-        uses: jdx/mise-action@v2
 
       - name: Install mise extra python packages
         run: |
